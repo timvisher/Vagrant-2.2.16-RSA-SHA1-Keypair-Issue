@@ -1,0 +1,5 @@
+*
+!.gitignore
+!repro
+!Vagrantfile
+!README.md
