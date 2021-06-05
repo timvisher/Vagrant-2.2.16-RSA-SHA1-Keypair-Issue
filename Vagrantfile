@@ -42,8 +42,4 @@ Vagrant.configure('2') do |config|
       'Name' => "Vagrant 2.2.16 testing #{ENV['vagrant_2_2_16_test_key']}",
     }
   end
-
-  config.vm.provision 'shell', inline: <<-SHELL
-    true
-  SHELL
 end
