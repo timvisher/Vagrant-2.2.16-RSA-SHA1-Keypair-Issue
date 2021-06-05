@@ -59,8 +59,7 @@ ssh -V
     {
       echo 'vagrant-2.2.16-sha1-bug-default-rsa failed to come up'
     } &&
-      time vagrant_2_2_16_test_key=vagrant-2.2.16-sha1-bug-default-rsa \
-           timeout --signal INT 60s vagrant destroy -f
+      vagrant_2_2_16_test_key=vagrant-2.2.16-sha1-bug-default-rsa vagrant destroy -f
 
   ##########################################################################
   ### Use `ssh-keygen -t rsa-sha2-512 …` to generate key
@@ -98,8 +97,7 @@ ssh -V
     {
       echo 'vagrant-2.2.16-sha1-bug-explicit-rsa-sha2-512 failed to come up'
     } &&
-      time vagrant_2_2_16_test_key=vagrant-2.2.16-sha1-bug-explicit-rsa-sha2-512 \
-           timeout --signal INT 60s vagrant destroy -f
+      vagrant_2_2_16_test_key=vagrant-2.2.16-sha1-bug-explicit-rsa-sha2-512 vagrant destroy -f
 
   ##########################################################################
   ### Use aws-cli (and thus EC2) to create the keypair
@@ -143,8 +141,7 @@ ssh -V
       {
         echo 'vagrant-2.2.16-sha1-bug-aws-created failed to come up'
       } &&
-        time vagrant_2_2_16_test_key=vagrant-2.2.16-sha1-bug-aws-created \
-             timeout --signal INT 60s vagrant destroy -f
+        vagrant_2_2_16_test_key=vagrant-2.2.16-sha1-bug-aws-created vagrant destroy -f
 ) 2>&1 |
   sed "
     s/$vagrant_2_2_16_subnet_id/subnet-redacted/g;
