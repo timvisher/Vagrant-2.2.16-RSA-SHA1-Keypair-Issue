@@ -1,110 +1,152 @@
 #!/usr/bin/env bash
 
-set -x
+export vagrant_2_2_16_subnet_id=$1
+export vagrant_2_2_16_security_group_id=$2
+
+if [[ -z $vagrant_2_2_16_subnet_id ]] ||
+     [[ -z $vagrant_2_2_16_security_group_id ]]
+then
+  cat <<'EOF'
+./repro subnet_id security_group_id
+
+subnet_id must be a public subnet
+security_group_id must allow ssh access from the host machine
+EOF
+  exit 1
+fi
 
 # Emit some system diagnostics, ignoring any errors from missing commands
+date '+%FT%T%z'
 sw_vers
 lsb_release -a
 vagrant --version
 ssh -V
 
-##########################################################################
-### Use `ssh-keygen -t rsa …` to generate key
-###
-### https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/
-###
-### This is broken on Vagrant 2.2.16 but works on 2.2.15 and down
-##########################################################################
+(
+  ##########################################################################
+  ### Use `ssh-keygen -t rsa …` to generate key
+  ###
+  ### https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/
+  ###
+  ### This is broken on Vagrant 2.2.16 but works on 2.2.15 and down
+  ##########################################################################
 
-# Test that we both have the private key _and_ that it exists in AWS. If
-# either is not true then we need to regenerate it.
-if [[ ! -f vagrant-2.2.16-sha1-bug-default-rsa ]] ||
-     ! aws ec2 describe-key-pairs --key-names vagrant-2.2.16-sha1-bug-default-rsa
-then
-  if ! ssh-keygen -t rsa -b 4096 -a 2000 -C "default rsa" -N '' -f vagrant-2.2.16-sha1-bug-default-rsa -m PEM
+  # Test that we both have the private key _and_ that it exists in AWS. If
+  # either is not true then we need to regenerate it.
+  if [[ ! -f vagrant-2.2.16-sha1-bug-default-rsa ]] ||
+       ! aws ec2 describe-key-pairs --key-names vagrant-2.2.16-sha1-bug-default-rsa
   then
+    if ! ssh-keygen -t rsa -b 4096 -a 2000 -C "default rsa" -N '' -f vagrant-2.2.16-sha1-bug-default-rsa -m PEM
+    then
       echo "Couldn't create vagrant-2.2.16-sha1-bug-default-rsa key"
       exit 1
+    fi
+
+    aws ec2 delete-key-pair --key-name vagrant-2.2.16-sha1-bug-default-rsa
+
+    if ! aws ec2 import-key-pair \
+         --key-name vagrant-2.2.16-sha1-bug-default-rsa \
+         --public-key-material 'fileb://vagrant-2.2.16-sha1-bug-default-rsa.pub' \
+         --tag-specifications "ResourceType=key-pair,Tags=[{Key=Name,Value=${LOGNAME} vagrant-2.2.16-sha1-bug-default-rsa}]"
+    then
+      echo "Couldn't import vagrant-2.2.16-sha1-bug-default-rsa key"
+      exit 1
+    fi
   fi
+  ssh-keygen -l -f vagrant-2.2.16-sha1-bug-default-rsa
+  time vagrant_2_2_16_test_key=vagrant-2.2.16-sha1-bug-default-rsa \
+       timeout --signal INT 60s vagrant up --debug 2>&1 ||
+    {
+      echo 'vagrant-2.2.16-sha1-bug-default-rsa failed to come up'
+    } &&
+      time vagrant_2_2_16_test_key=vagrant-2.2.16-sha1-bug-default-rsa \
+           timeout --signal INT 60s vagrant destroy -f
 
-  aws ec2 delete-key-pair --key-name vagrant-2.2.16-sha1-bug-default-rsa
+  ##########################################################################
+  ### Use `ssh-keygen -t rsa-sha2-512 …` to generate key
+  ###
+  ### https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/
+  ###
+  ### This is broken on Vagrant 2.2.16 but works on 2.2.15 and down
+  ##########################################################################
 
-  if ! aws ec2 import-key-pair \
-       --key-name vagrant-2.2.16-sha1-bug-default-rsa \
-       --public-key-material 'fileb://vagrant-2.2.16-sha1-bug-default-rsa.pub' \
-       --tag-specifications "ResourceType=key-pair,Tags=[{Key=Name,Value=${LOGNAME} vagrant-2.2.16-sha1-bug-default-rsa}]"
+  # Test that we both have the private key _and_ that it exists in AWS. If
+  # either is not true then we need to regenerate it.
+  if [[ ! -f vagrant-2.2.16-sha1-bug-explicit-rsa-sha2-512 ]] ||
+       ! aws ec2 describe-key-pairs --key-names vagrant-2.2.16-sha1-bug-explicit-rsa-sha2-512
   then
-    echo "Couldn't import vagrant-2.2.16-sha1-bug-default-rsa key"
-    exit 1
-  fi
-fi
-ssh-keygen -l -f vagrant-2.2.16-sha1-bug-default-rsa
-
-##########################################################################
-### Use `ssh-keygen -t rsa-sha2-512 …` to generate key
-###
-### https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/
-###
-### This is broken on Vagrant 2.2.16 but works on 2.2.15 and down
-##########################################################################
-
-# Test that we both have the private key _and_ that it exists in AWS. If
-# either is not true then we need to regenerate it.
-if [[ ! -f vagrant-2.2.16-sha1-bug-explicit-rsa-sha2-512 ]] ||
-     ! aws ec2 describe-key-pairs --key-names vagrant-2.2.16-sha1-bug-explicit-rsa-sha2-512
-then
-  if ! ssh-keygen -t rsa-sha2-512 -b 4096 -a 2000 -C "explicit rsa-sha2-512" -N '' -f vagrant-2.2.16-sha1-bug-explicit-rsa-sha2-512 -m PEM
-  then
+    if ! ssh-keygen -t rsa-sha2-512 -b 4096 -a 2000 -C "explicit rsa-sha2-512" -N '' -f vagrant-2.2.16-sha1-bug-explicit-rsa-sha2-512 -m PEM
+    then
       echo "Couldn't create vagrant-2.2.16-sha1-bug-explicit-rsa-sha2-512 key"
       exit 1
+    fi
+
+    aws ec2 delete-key-pair --key-name vagrant-2.2.16-sha1-bug-explicit-rsa-sha2-512
+
+    if ! aws ec2 import-key-pair \
+         --key-name vagrant-2.2.16-sha1-bug-explicit-rsa-sha2-512 \
+         --public-key-material 'fileb://vagrant-2.2.16-sha1-bug-explicit-rsa-sha2-512.pub' \
+         --tag-specifications "ResourceType=key-pair,Tags=[{Key=Name,Value=${LOGNAME} vagrant-2.2.16-sha1-bug-explicit-rsa-sha2-512}]"
+    then
+      echo "Couldn't import vagrant-2.2.16-sha1-bug-explicit-rsa-sha2-512 key"
+      exit 1
+    fi
   fi
+  ssh-keygen -l -f vagrant-2.2.16-sha1-bug-explicit-rsa-sha2-512
+  time vagrant_2_2_16_test_key=vagrant-2.2.16-sha1-bug-explicit-rsa-sha2-512 \
+       timeout --signal INT 60s vagrant up --debug 2>&1 ||
+    {
+      echo 'vagrant-2.2.16-sha1-bug-explicit-rsa-sha2-512 failed to come up'
+    } &&
+      time vagrant_2_2_16_test_key=vagrant-2.2.16-sha1-bug-explicit-rsa-sha2-512 \
+           timeout --signal INT 60s vagrant destroy -f
 
-  aws ec2 delete-key-pair --key-name vagrant-2.2.16-sha1-bug-explicit-rsa-sha2-512
+  ##########################################################################
+  ### Use aws-cli (and thus EC2) to create the keypair
+  ###
+  ### !!! This method appears to work with 2.2.16 !!!
+  ##########################################################################
 
-  if ! aws ec2 import-key-pair \
-       --key-name vagrant-2.2.16-sha1-bug-explicit-rsa-sha2-512 \
-       --public-key-material 'fileb://vagrant-2.2.16-sha1-bug-explicit-rsa-sha2-512.pub' \
-       --tag-specifications "ResourceType=key-pair,Tags=[{Key=Name,Value=${LOGNAME} vagrant-2.2.16-sha1-bug-explicit-rsa-sha2-512}]"
+  # Check if we have the private key locally. If we don't we need to
+  # recreate the whole thing.
+  if [[ ! -f vagrant-2.2.16-sha1-bug-aws-created ]]
   then
-    echo "Couldn't import vagrant-2.2.16-sha1-bug-explicit-rsa-sha2-512 key"
-    exit 1
-  fi
-fi
-ssh-keygen -l -f vagrant-2.2.16-sha1-bug-explicit-rsa-sha2-512
+    # We don't have a local copy of the private key
 
-##########################################################################
-### Use aws-cli (and thus EC2) to create the keypair
-###
-### !!! This method appears to work with 2.2.16 !!!
-##########################################################################
+    # If the key already exists then we want to delete it so we can replace
+    # it
+    if aws ec2 describe-key-pairs --key-names vagrant-2.2.16-sha1-bug-aws-created
+    then
+      aws ec2 delete-key-pair --key-name vagrant-2.2.16-sha1-bug-aws-created ||
+        {
+          echo "Failed to delete existing aws key"
+          exit 1
+        }
+    fi
 
-# Check if we have the private key locally. If we don't we need to
-# recreate the whole thing.
-if [[ ! -f vagrant-2.2.16-sha1-bug-aws-created ]]
-then
-  # We don't have a local copy of the private key
-
-  # If the key already exists then we want to delete it so we can replace
-  # it
-  if aws ec2 describe-key-pairs --key-names vagrant-2.2.16-sha1-bug-aws-created
-  then
-    aws ec2 delete-key-pair --key-name vagrant-2.2.16-sha1-bug-aws-created ||
+    # Now we're sure that the key doesn't exist so we can go ahead and
+    # create it
+    aws ec2 create-key-pair \
+        --key-name vagrant-2.2.16-sha1-bug-aws-created \
+        --tag-specifications "ResourceType=key-pair,Tags=[{Key=Name,Value=${LOGNAME} vagrant-2.2.16-sha1-bug-aws-created}]" \
+        --query "KeyMaterial" --output text > vagrant-2.2.16-sha1-bug-aws-created ||
       {
-        echo "Failed to delete existing aws key"
+        echo "Couldn't create key pair"
         exit 1
       }
   fi
-
-  # Now we're sure that the key doesn't exist so we can go ahead and
-  # create it
-  aws ec2 create-key-pair \
-      --key-name vagrant-2.2.16-sha1-bug-aws-created \
-      --tag-specifications "ResourceType=key-pair,Tags=[{Key=Name,Value=${LOGNAME} vagrant-2.2.16-sha1-bug-aws-created}]" \
-      --query "KeyMaterial" --output text > vagrant-2.2.16-sha1-bug-aws-created ||
-    {
-      echo "Couldn't create key pair"
-      exit 1
-    }
-fi
-chmod 400 vagrant-2.2.16-sha1-bug-aws-created
-ssh-keygen -l -f vagrant-2.2.16-sha1-bug-aws-created
+  chmod 400 vagrant-2.2.16-sha1-bug-aws-created
+  ssh-keygen -l -f vagrant-2.2.16-sha1-bug-aws-created
+  time vagrant_2_2_16_test_key=vagrant-2.2.16-sha1-bug-aws-created \
+       timeout --signal INT 60s vagrant up --debug 2>&1 &&
+    echo 'vagrant-2.2.16-sha1-bug-aws-created succeeded' ||
+      {
+        echo 'vagrant-2.2.16-sha1-bug-aws-created failed to come up'
+      } &&
+        time vagrant_2_2_16_test_key=vagrant-2.2.16-sha1-bug-aws-created \
+             timeout --signal INT 60s vagrant destroy -f
+) 2>&1 |
+  sed "
+    s/$vagrant_2_2_16_subnet_id/subnet-redacted/g;
+    s/$vagrant_2_2_16_security_group_id/sg-redacted/;" |
+  tee repro.log
