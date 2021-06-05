@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+
+set -x
+
+ssh -V
+
+# Let's generate some keys based on the docs
+# https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/
+[[ -f explicit-rsa-sha2-512 ]] &&
+  ssh-keygen -l -f explicit-rsa-sha2-512 ||
+    ssh-keygen -t rsa-sha2-512 -b 4096 -a 2000 -C "explicit rsa-sha2-512" -N '' -f explicit-rsa-sha2-512 -m PEM ||
+    {
+      echo "Couldn't create explicit-rsa-sha2-512 key"
+      exit 1
+    }
+
+[[ -f default-rsa ]] &&
+  ssh-keygen -l -f default-rsa ||
+    ssh-keygen -t rsa -b 4096 -a 2000 -C "default rsa" -N '' -f default-rsa -m PEM ||
+    {
+      echo "Couldn't create default-rsa key"
+      exit 1
+    }
+
+if [[ ! -f aws-key ]]
+then
+  # We don't have a local copy of the private key
+
+  # If the key already exists then we want to delete it so we can replace
+  # it
+  if aws ec2 describe-key-pairs --key-names "${LOGNAME}"-vagrant-2.2.16-sha1-test
+  then
+    aws ec2 delete-key-pair --key-name "${LOGNAME}"-vagrant-2.2.16-sha1-test ||
+      {
+        echo "Failed to delete existing aws key"
+        exit 1
+      }
+  fi
+
+  # Now we're sure that the key doesn't exist so we can go ahead and
+  # create it
+  aws ec2 create-key-pair --key-name "${LOGNAME}"-vagrant-2.2.16-sha1-test --query "KeyMaterial" --output text > aws-key ||
+    {
+      echo "Couldn't create key pair"
+      exit 1
+    }
+fi
+chmod 400 aws-key
+ssh-keygen -l -f aws-key
